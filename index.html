@@ -269,7 +269,9 @@
 </div>
 
 <!-- JSZip for bundled download -->
-<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"
+        crossorigin="anonymous"
+        integrity="sha384-OLBgp1GsljhM2TJ+sbHjaiH9txEUvgdDTAzHv2P24donTt6/529l+9Ua0vFImLlb"></script>
 
 <script>
 'use strict';
@@ -285,7 +287,13 @@ const INNER_W     = CARD_W - 2 * BORDER;  // 600
 const INNER_H     = CARD_H - 2 * BORDER;  // 894
 
 const SCRYFALL    = 'https://api.scryfall.com';
-const DELAY_MS    = 100; // respect Scryfall's 100 ms rate-limit recommendation
+const DELAY_MS    = 100;  // respect Scryfall's 100 ms rate-limit recommendation
+/** Maximum copies of a single card that can be requested in one list entry. */
+const MAX_CARD_QUANTITY = 99;
+/** Conversion factor: inches per metre (used for DPI → pixels-per-metre). */
+const INCHES_TO_METERS  = 39.3701;
+/** Delay (ms) between sequential browser downloads to avoid throttling. */
+const SEQUENTIAL_DOWNLOAD_DELAY_MS = 300;
 
 /* ──────────────────────────────────────────────────────────────
    State
@@ -315,7 +323,7 @@ function parseCardList(text) {
 
     const match = line.match(/^(\d+)[xX]?\s+(.+)$/);
     if (match) {
-      const qty  = Math.min(Math.max(parseInt(match[1], 10), 1), 99);
+      const qty  = Math.min(Math.max(parseInt(match[1], 10), 1), MAX_CARD_QUANTITY);
       const name = match[2].trim();
       for (let i = 0; i < qty; i++) cards.push(name);
     } else {
@@ -438,7 +446,7 @@ function be32(n) {
  * PNG layout: 8-byte sig + IHDR (4+4+13+4=25 bytes) = 33 bytes, then next chunk.
  */
 function embedDPI(pngBytes, dpi) {
-  const ppm = Math.round(dpi * 39.3701); // pixels per metre
+  const ppm = Math.round(dpi * INCHES_TO_METERS); // pixels per metre
 
   // pHYs data: X ppu (4) + Y ppu (4) + unit=metre (1) = 9 bytes
   const physData = new Uint8Array([...be32(ppm), ...be32(ppm), 1]);
@@ -512,6 +520,7 @@ function triggerDownload(blob, filename) {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
+  // Revoke after 10 s to allow the browser's download manager to finish reading the blob
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 
@@ -539,7 +548,7 @@ async function downloadAll() {
       for (let i = 0; i < generated.length; i++) {
         showStatus(`Downloading ${i + 1}/${generated.length}…`, 'info', Math.round(((i + 1) / generated.length) * 100));
         await downloadCard(i);
-        await sleep(300);
+        await sleep(SEQUENTIAL_DOWNLOAD_DELAY_MS);
       }
       showStatus('✓ All cards downloaded.', 'success');
       return;
@@ -597,8 +606,9 @@ async function generateProxies() {
   controls.style.display    = 'none';
   generated                 = [];
 
-  // Deduplicate for API requests
-  const uniqueNames = [...new Set(cardNames.map(n => n.toLowerCase()))];
+  // Deduplicate for API requests; also build reverse map (lower → original) for status messages
+  const uniqueNames    = [...new Set(cardNames.map(n => n.toLowerCase()))];
+  const lowerToOriginal = new Map(cardNames.map(n => [n.toLowerCase(), n]));
 
   // ── Phase 1: Fetch card data ──────────────────────────────
   const fetchedMap = new Map(); // lower-name → card data or Error
@@ -606,7 +616,7 @@ async function generateProxies() {
   for (let i = 0; i < uniqueNames.length; i++) {
     const name = uniqueNames[i];
     showStatus(
-      `Fetching card ${i + 1} of ${uniqueNames.length}: "${cardNames.find(n => n.toLowerCase() === name)}"`,
+      `Fetching card ${i + 1} of ${uniqueNames.length}: "${lowerToOriginal.get(name)}"`,
       'info',
       Math.round((i / uniqueNames.length) * 50),
     );
