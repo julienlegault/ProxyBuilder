@@ -207,16 +207,17 @@
 
       #card-grid {
         display: grid;
-        /* 3 cards across on a US Letter page at 300 dpi */
-        grid-template-columns: repeat(3, 744px);
+        /* 2 cards across; each card is 744px wide + 72px padding on each side (left+right = 144px) = 888px total */
+        grid-template-columns: repeat(2, 888px);
         gap: 0;
         padding: 0;
       }
 
       .card-item {
-        background: none;
+        background: #000;
         border: none;
         border-radius: 0;
+        padding: 72px;
         page-break-inside: avoid;
         break-inside: avoid;
       }
@@ -224,6 +225,7 @@
       .card-item canvas {
         width: 744px !important;
         height: 1038px !important;
+        display: block;
       }
 
       .card-info { display: none; }
@@ -236,7 +238,7 @@
   <h1>🃏 MTG Proxy Builder</h1>
   <p class="subtitle">
     Generate print-ready proxy cards for makeplayingcards.com using Scryfall card art &nbsp;•&nbsp;
-    744 × 1038 px &nbsp;•&nbsp; 72 px black border &nbsp;•&nbsp; 300 DPI PNG
+    744 × 1038 px &nbsp;•&nbsp; 72 px black padding border &nbsp;•&nbsp; 300 DPI PNG
   </p>
 
   <div class="input-section">
@@ -281,10 +283,7 @@
 ────────────────────────────────────────────────────────────── */
 const CARD_W      = 744;
 const CARD_H      = 1038;
-const BORDER      = 72;
 const OUTPUT_DPI  = 300;
-const INNER_W     = CARD_W - 2 * BORDER;  // 600
-const INNER_H     = CARD_H - 2 * BORDER;  // 894
 
 const SCRYFALL    = 'https://api.scryfall.com';
 const DELAY_MS    = 100;  // respect Scryfall's 100 ms rate-limit recommendation
@@ -381,9 +380,9 @@ function loadImage(url) {
 
 /* ──────────────────────────────────────────────────────────────
    Card renderer
-   Output: 744 × 1038 canvas with 72px black border.
-   The card art is scaled to cover the 600 × 894 inner area
-   (object-fit: cover) to avoid letterboxing.
+   Output: 744 × 1038 canvas filled edge-to-edge with card art.
+   The 72px black border is applied via CSS padding so the PNG
+   contains only the full-resolution card image.
 ────────────────────────────────────────────────────────────── */
 async function renderCard(cardData) {
   const canvas = document.createElement('canvas');
@@ -391,28 +390,17 @@ async function renderCard(cardData) {
   canvas.height = CARD_H;
   const ctx = canvas.getContext('2d');
 
-  // Solid black background (border)
-  ctx.fillStyle = '#000000';
-  ctx.fillRect(0, 0, CARD_W, CARD_H);
-
   const imgUrl = getImageUrl(cardData);
   if (imgUrl) {
     const img = await loadImage(imgUrl);
 
-    // Cover-fit: fill inner area, crop edges if aspect ratios differ
-    const scale = Math.max(INNER_W / img.width, INNER_H / img.height);
+    // Cover-fit: fill full 744 × 1038 canvas, crop edges if aspect ratios differ
+    const scale = Math.max(CARD_W / img.width, CARD_H / img.height);
     const sw = img.width  * scale;
     const sh = img.height * scale;
-    const dx = BORDER + (INNER_W - sw) / 2;
-    const dy = BORDER + (INNER_H - sh) / 2;
-
-    // Clip to inner area so the image never bleeds into the border
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(BORDER, BORDER, INNER_W, INNER_H);
-    ctx.clip();
+    const dx = (CARD_W - sw) / 2;
+    const dy = (CARD_H - sh) / 2;
     ctx.drawImage(img, dx, dy, sw, sh);
-    ctx.restore();
   }
 
   return canvas;
