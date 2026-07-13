@@ -197,6 +197,14 @@
 
     /* ── Print styles ──────────────────────────────────────── */
     @media print {
+      :root {
+        --print-card-width: 63mm;
+        --print-card-height: 88mm;
+        --print-card-padding: 6.096mm; /* 0.24in */
+        --print-card-total-width: calc(var(--print-card-width) + (2 * var(--print-card-padding)));
+        --print-card-total-height: calc(var(--print-card-height) + (2 * var(--print-card-padding)));
+      }
+
       @page {
         size: portrait;
         margin: 0;
@@ -213,10 +221,10 @@
       #card-grid {
         display: grid;
         /* Up to 3 cards per row; each item is 63mm × 88mm card + 0.24in black padding on every side */
-        grid-template-columns: repeat(3, calc(63mm + 0.48in));
+        grid-template-columns: repeat(3, var(--print-card-total-width));
         gap: 0;
         padding: 0;
-        max-width: calc(3 * (63mm + 0.48in));
+        max-width: calc(3 * var(--print-card-total-width));
         margin: 0 auto;
       }
 
@@ -224,16 +232,16 @@
         background: #000;
         border: none;
         border-radius: 0;
-        padding: 0.24in;
+        padding: var(--print-card-padding);
         page-break-inside: avoid;
         break-inside: avoid;
-        width: calc(63mm + 0.48in);
-        height: calc(88mm + 0.48in);
+        width: var(--print-card-total-width);
+        height: var(--print-card-total-height);
       }
 
       .card-item canvas {
-        width: 63mm !important;
-        height: 88mm !important;
+        width: var(--print-card-width) !important;
+        height: var(--print-card-height) !important;
         display: block;
       }
 
