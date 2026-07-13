@@ -198,11 +198,8 @@
     /* ── Print styles ──────────────────────────────────────── */
     @media print {
       :root {
-        --print-card-width: 63mm;
-        --print-card-height: 88mm;
-        --print-card-padding: 6.096mm; /* 0.24in */
-        --print-card-total-width: calc(var(--print-card-width) + (2 * var(--print-card-padding)));
-        --print-card-total-height: calc(var(--print-card-height) + (2 * var(--print-card-padding)));
+        --print-output-width: 69.088mm;  /* 816px at 300 DPI */
+        --print-output-height: 93.98mm;  /* 1110px at 300 DPI */
       }
 
       @page {
@@ -220,28 +217,28 @@
 
       #card-grid {
         display: grid;
-        /* Up to 3 cards per row; each item is 63mm × 88mm card + 0.24in black padding on every side */
-        grid-template-columns: repeat(3, var(--print-card-total-width));
+        /* Up to 3 cards per row; each image is 816 × 1110 (includes black border) */
+        grid-template-columns: repeat(3, var(--print-output-width));
         gap: 0;
         padding: 0;
-        max-width: calc(3 * var(--print-card-total-width));
+        max-width: calc(3 * var(--print-output-width));
         margin: 0 auto;
       }
 
       .card-item {
-        background: #000;
+        background: transparent;
         border: none;
         border-radius: 0;
-        padding: var(--print-card-padding);
+        padding: 0;
         page-break-inside: avoid;
         break-inside: avoid;
-        width: var(--print-card-total-width);
-        height: var(--print-card-total-height);
+        width: var(--print-output-width);
+        height: var(--print-output-height);
       }
 
       .card-item canvas {
-        width: var(--print-card-width) !important;
-        height: var(--print-card-height) !important;
+        width: var(--print-output-width) !important;
+        height: var(--print-output-height) !important;
         display: block;
       }
 
@@ -255,7 +252,7 @@
   <h1>🃏 MTG Proxy Builder</h1>
   <p class="subtitle">
     Generate print-ready proxy cards for makeplayingcards.com using Scryfall card art &nbsp;•&nbsp;
-    63 × 88 mm cards &nbsp;•&nbsp; 0.24 in black padding &nbsp;•&nbsp; 300 DPI PNG
+    744 × 1038 artwork &nbsp;•&nbsp; 816 × 1110 final image with black border &nbsp;•&nbsp; 300 DPI PNG
   </p>
 
   <div class="input-section">
@@ -300,6 +297,9 @@
 ────────────────────────────────────────────────────────────── */
 const CARD_W      = 744;
 const CARD_H      = 1038;
+const BORDER_PX   = 36;
+const OUTPUT_W    = CARD_W + (2 * BORDER_PX);
+const OUTPUT_H    = CARD_H + (2 * BORDER_PX);
 const OUTPUT_DPI  = 300;
 
 const SCRYFALL    = 'https://api.scryfall.com';
@@ -397,26 +397,27 @@ function loadImage(url) {
 
 /* ──────────────────────────────────────────────────────────────
    Card renderer
-   Output: 744 × 1038 canvas filled edge-to-edge with card art.
-   The 72px black border is applied via CSS padding so the PNG
-   contains only the full-resolution card image.
+   Output: 816 × 1110 canvas with a black border around a centered
+   744 × 1038 card-art region.
 ────────────────────────────────────────────────────────────── */
 async function renderCard(cardData) {
   const canvas = document.createElement('canvas');
-  canvas.width  = CARD_W;
-  canvas.height = CARD_H;
+  canvas.width  = OUTPUT_W;
+  canvas.height = OUTPUT_H;
   const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, OUTPUT_W, OUTPUT_H);
 
   const imgUrl = getImageUrl(cardData);
   if (imgUrl) {
     const img = await loadImage(imgUrl);
 
-    // Cover-fit: fill full 744 × 1038 canvas, crop edges if aspect ratios differ
+    // Cover-fit: fill the 744 × 1038 card region, crop edges if aspect ratios differ
     const scale = Math.max(CARD_W / img.width, CARD_H / img.height);
     const sw = img.width  * scale;
     const sh = img.height * scale;
-    const dx = (CARD_W - sw) / 2;
-    const dy = (CARD_H - sh) / 2;
+    const dx = BORDER_PX + ((CARD_W - sw) / 2);
+    const dy = BORDER_PX + ((CARD_H - sh) / 2);
     ctx.drawImage(img, dx, dy, sw, sh);
   }
 
