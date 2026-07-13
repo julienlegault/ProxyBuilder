@@ -197,6 +197,19 @@
 
     /* ── Print styles ──────────────────────────────────────── */
     @media print {
+      :root {
+        --print-card-width: 63mm;
+        --print-card-height: 88mm;
+        --print-card-padding: 6.096mm; /* 0.24in */
+        --print-card-total-width: calc(var(--print-card-width) + (2 * var(--print-card-padding)));
+        --print-card-total-height: calc(var(--print-card-height) + (2 * var(--print-card-padding)));
+      }
+
+      @page {
+        size: portrait;
+        margin: 0;
+      }
+
       body { background: #fff; }
 
       .input-section,
@@ -207,24 +220,28 @@
 
       #card-grid {
         display: grid;
-        /* 2 cards across; each card is 744px wide + 72px padding on each side (left+right = 144px) = 888px total */
-        grid-template-columns: repeat(2, 888px);
+        /* Up to 3 cards per row; each item is 63mm × 88mm card + 0.24in black padding on every side */
+        grid-template-columns: repeat(3, var(--print-card-total-width));
         gap: 0;
         padding: 0;
+        max-width: calc(3 * var(--print-card-total-width));
+        margin: 0 auto;
       }
 
       .card-item {
         background: #000;
         border: none;
         border-radius: 0;
-        padding: 72px;
+        padding: var(--print-card-padding);
         page-break-inside: avoid;
         break-inside: avoid;
+        width: var(--print-card-total-width);
+        height: var(--print-card-total-height);
       }
 
       .card-item canvas {
-        width: 744px !important;
-        height: 1038px !important;
+        width: var(--print-card-width) !important;
+        height: var(--print-card-height) !important;
         display: block;
       }
 
@@ -238,7 +255,7 @@
   <h1>🃏 MTG Proxy Builder</h1>
   <p class="subtitle">
     Generate print-ready proxy cards for makeplayingcards.com using Scryfall card art &nbsp;•&nbsp;
-    744 × 1038 px &nbsp;•&nbsp; 72 px black padding border &nbsp;•&nbsp; 300 DPI PNG
+    63 × 88 mm cards &nbsp;•&nbsp; 0.24 in black padding &nbsp;•&nbsp; 300 DPI PNG
   </p>
 
   <div class="input-section">
