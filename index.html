@@ -106,6 +106,9 @@
 
     .btn-sm { padding: 0.3rem 0.7rem; font-size: 0.78rem; }
 
+    .btn-toggle-on { background: #1a6e4a; color: #d4f0e0; border: 1px solid #4ae2a0; }
+    .btn-toggle-on:hover { filter: brightness(1.15); }
+
     /* ── Status / progress ─────────────────────────────────── */
     #status {
       display: none;
@@ -264,6 +267,7 @@
     ></textarea>
     <div class="btn-row">
       <button class="btn btn-primary" id="generateBtn">Generate Proxies</button>
+      <button class="btn btn-secondary" id="cardFrameBtn" title="Use the blue card frame instead of Scryfall art">🖼 Use Card Frame</button>
       <button class="btn btn-secondary" id="clearBtn">Clear</button>
       <span class="hint">Supported formats: &nbsp;<code>4x Card Name</code> &nbsp;or&nbsp; <code>4 Card Name</code> &nbsp;or&nbsp; <code>Card Name</code></span>
     </div>
@@ -316,6 +320,8 @@ const SEQUENTIAL_DOWNLOAD_DELAY_MS = 300;
 ────────────────────────────────────────────────────────────── */
 const cardCache   = new Map();   // name.toLowerCase() → card data
 let   generated   = [];          // { canvas, name }[]
+let   useCardFrame = false;      // when true, render with blue card frame
+let   cachedFrameImg = null;     // loaded blue_card.png
 
 /* ──────────────────────────────────────────────────────────────
    Utilities
@@ -661,7 +667,7 @@ async function generateProxies() {
         </div>`;
     } else {
       try {
-        const canvas   = await renderCard(result);
+        const canvas   = useCardFrame ? await renderCardWithFrame(result) : await renderCard(result);
         const cardName = result.name;
         const idx      = generated.length;
         generated.push({ canvas, name: cardName });
@@ -707,9 +713,138 @@ function escapeHtml(str) {
 }
 
 /* ──────────────────────────────────────────────────────────────
+   Card frame renderer
+   Loads blue_card.png as the background and overlays card text.
+   Skips: art image, set watermark, flavor text, collector info.
+────────────────────────────────────────────────────────────── */
+
+/** Load and cache the blue card frame image. */
+function loadCardFrame() {
+  if (cachedFrameImg) return Promise.resolve(cachedFrameImg);
+  return loadImage('blue_card.png').then(img => { cachedFrameImg = img; return img; });
+}
+
+/**
+ * Split `text` into lines that fit within `maxWidth` pixels.
+ * Respects newline characters as paragraph breaks.
+ */
+function wrapText(ctx, text, maxWidth) {
+  const result = [];
+  for (const paragraph of text.split('\n')) {
+    if (paragraph === '') { result.push(''); continue; }
+    const words = paragraph.split(' ');
+    let line = '';
+    for (const word of words) {
+      const candidate = line ? line + ' ' + word : word;
+      if (ctx.measureText(candidate).width > maxWidth && line !== '') {
+        result.push(line);
+        line = word;
+      } else {
+        line = candidate;
+      }
+    }
+    if (line) result.push(line);
+  }
+  return result;
+}
+
+/**
+ * Render card data on top of the blue card frame.
+ * Draws: name, mana cost, type line, oracle text.
+ * Skips: Scryfall art, set watermark, flavor text, collector info.
+ *
+ * Layout positions are in card-area coordinates (744 × 1038).
+ * Add BORDER_PX (36) to get absolute canvas coordinates.
+ *
+ *   Name bar  – y ≈ 35 … 97   (pill at top)
+ *   Art area  – y ≈ 100 … 537  (skipped entirely)
+ *   Type bar  – y ≈ 542 … 602  (pill in middle)
+ *   Text box  – y ≈ 608 … 985  (rules text, no flavor)
+ */
+async function renderCardWithFrame(cardData) {
+  const canvas = document.createElement('canvas');
+  canvas.width  = OUTPUT_W;
+  canvas.height = OUTPUT_H;
+  const ctx = canvas.getContext('2d');
+
+  // Black outer border
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, OUTPUT_W, OUTPUT_H);
+
+  // Draw the blue card frame
+  const frameImg = await loadCardFrame();
+  ctx.drawImage(frameImg, BORDER_PX, BORDER_PX, CARD_W, CARD_H);
+
+  // Resolve data from first face for double-faced cards
+  const face      = Array.isArray(cardData.card_faces) ? cardData.card_faces[0] : cardData;
+  const name      = face.name       || cardData.name       || '';
+  const manaCost  = face.mana_cost  || cardData.mana_cost  || '';
+  const typeLine  = face.type_line  || cardData.type_line  || '';
+  const oracleText = face.oracle_text || cardData.oracle_text || '';
+  // flavor_text intentionally skipped
+
+  ctx.fillStyle   = '#000';
+  ctx.textBaseline = 'middle';
+
+  // ── Name (name bar, left-aligned) ──────────────────────────
+  const nameBarCenterY = BORDER_PX + 66;
+  const nameAreaLeft   = BORDER_PX + 52;
+  const nameAreaWidth  = CARD_W - 200;   // leave room for mana cost
+
+  ctx.font      = 'bold 30px "Times New Roman", serif';
+  ctx.textAlign = 'left';
+  ctx.fillText(name, nameAreaLeft, nameBarCenterY, nameAreaWidth);
+
+  // ── Mana cost (name bar, right-aligned) ────────────────────
+  ctx.font      = '22px "Courier New", monospace';
+  ctx.textAlign = 'right';
+  ctx.fillText(manaCost, BORDER_PX + CARD_W - 45, nameBarCenterY, 165);
+
+  // ── Type line (type bar, left-aligned) ─────────────────────
+  const typeBarCenterY = BORDER_PX + 572;
+
+  ctx.font      = 'bold 22px "Times New Roman", serif';
+  ctx.textAlign = 'left';
+  ctx.fillText(typeLine, nameAreaLeft, typeBarCenterY, CARD_W - 80);
+
+  // ── Oracle text (text box, wrapped) ────────────────────────
+  const textBoxX      = BORDER_PX + 55;
+  const textBoxWidth  = CARD_W - 110;
+  const textBoxStartY = BORDER_PX + 638;
+  const textBoxEndY   = BORDER_PX + 978;
+  const lineHeight    = 30;
+
+  ctx.font         = '21px "Times New Roman", serif';
+  ctx.textBaseline = 'top';
+  ctx.textAlign    = 'left';
+
+  const lines = wrapText(ctx, oracleText, textBoxWidth);
+  let y = textBoxStartY;
+  for (const line of lines) {
+    if (y + lineHeight > textBoxEndY) break;
+    ctx.fillText(line, textBoxX, y);
+    y += line === '' ? lineHeight * 0.6 : lineHeight;  // smaller gap for blank lines (paragraph spacing)
+  }
+
+  return canvas;
+}
+
+/* ──────────────────────────────────────────────────────────────
    Event listeners
 ────────────────────────────────────────────────────────────── */
 document.getElementById('generateBtn').addEventListener('click', generateProxies);
+
+document.getElementById('cardFrameBtn').addEventListener('click', () => {
+  useCardFrame = !useCardFrame;
+  const btn = document.getElementById('cardFrameBtn');
+  if (useCardFrame) {
+    btn.textContent = '🖼 Card Frame: ON';
+    btn.className   = 'btn btn-toggle-on';
+  } else {
+    btn.textContent = '🖼 Use Card Frame';
+    btn.className   = 'btn btn-secondary';
+  }
+});
 
 document.getElementById('clearBtn').addEventListener('click', () => {
   document.getElementById('cardList').value  = '';
