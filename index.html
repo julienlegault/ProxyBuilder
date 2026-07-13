@@ -721,12 +721,16 @@ function escapeHtml(str) {
 /** Load and cache the blue card frame image. */
 function loadCardFrame() {
   if (cachedFrameImg) return Promise.resolve(cachedFrameImg);
-  return loadImage('blue_card.png').then(img => { cachedFrameImg = img; return img; });
+  return loadImage('blue_card.png')
+    .then(img => { cachedFrameImg = img; return img; })
+    .catch(() => { throw new Error('Could not load blue_card.png – make sure it is in the same folder as index.html'); });
 }
 
 /**
  * Split `text` into lines that fit within `maxWidth` pixels.
  * Respects newline characters as paragraph breaks.
+ * Words that individually exceed maxWidth are placed on their own line
+ * (they may visually overflow, but this prevents infinite loops).
  */
 function wrapText(ctx, text, maxWidth) {
   const result = [];
